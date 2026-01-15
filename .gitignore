@@ -1,1 +1,5 @@
 instances
+orchestrator/pb_data/*
+!orchestrator/pb_data/auxiliary.db
+!orchestrator/pb_data/data.db
+!orchestrator/pb_data/types.d.ts

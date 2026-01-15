@@ -144,6 +144,23 @@ func main() {
 		return e.Next()
 	})
 
+	app.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
+		fmt.Println("onTerminate")
+
+		records, err := app.FindAllRecords("instances")
+		if err != nil {
+			return e.Next()
+		}
+
+		for _, record := range records {
+			record.Set("isActive", false)
+			record.Set("pid", 0)
+			app.Save(record)
+		}
+
+		return e.Next()
+	})
+
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
