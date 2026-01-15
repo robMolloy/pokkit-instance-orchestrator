@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
@@ -20,22 +21,28 @@ func isPocketbaseInstanceActive(portNumber int) (bool, error) {
 	output, err := cmd.Output()
 
 	if err != nil {
+		fmt.Println("Error checking PocketBase instance:", err)
 		return false, err
 	}
 	re := regexp.MustCompile(`"code"\s*:\s*([^,]+)`)
 	matches := re.FindStringSubmatch(string(output))
 	match := matches[0]
 	isActive := strings.Contains(match, "200")
+	if !isActive {
+		fmt.Println("PocketBase instance is not active")
+	}
 
 	return isActive, nil
 }
 
 func servePocketbase(portNumber int, dirName string) (*int, error) {
-	if err := os.MkdirAll(dirName, 0755); err != nil {
+	instanceDirRelativePath := fmt.Sprintf("../instances/%s", dirName)
+	if err := os.MkdirAll(instanceDirRelativePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create base directory: %w", err)
 	}
 
-	logFile := filepath.Join(dirName, fmt.Sprintf("pocketbase-%s.log", dirName))
+	logFile := filepath.Join(instanceDirRelativePath, fmt.Sprintf("pocketbase-%d.log", portNumber))
+
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 
 	if err != nil {
@@ -46,10 +53,10 @@ func servePocketbase(portNumber int, dirName string) (*int, error) {
 	// Prepare the command
 	cmd := exec.Command(
 		"./pocketbase", "serve",
-		fmt.Sprintf("--dir=%s/pb_data", dirName),
-		fmt.Sprintf("--publicDir=%s/pb_public", dirName),
-		fmt.Sprintf("--hooksDir=%s/pb_hooks", dirName),
-		fmt.Sprintf("--migrationsDir=%s/pb_migrations", dirName),
+		fmt.Sprintf("--dir=%s/pb_data", instanceDirRelativePath),
+		fmt.Sprintf("--publicDir=%s/pb_public", instanceDirRelativePath),
+		fmt.Sprintf("--hooksDir=%s/pb_hooks", instanceDirRelativePath),
+		fmt.Sprintf("--migrationsDir=%s/pb_migrations", instanceDirRelativePath),
 		fmt.Sprintf("--http=127.0.0.1:%d", portNumber),
 	)
 
@@ -96,10 +103,15 @@ func main() {
 		for _, record := range records {
 			portNumber := record.GetInt("portNumber")
 			dirName := record.GetString("dirName")
-			pid, _ := servePocketbase(portNumber, dirName)
+			pid, err := servePocketbase(portNumber, dirName)
+			if err != nil {
+				fmt.Println("Error starting PocketBase:", err)
+			}
 			record.Set("pid", pid)
 			app.Save(record)
 		}
+
+		time.Sleep(time.Millisecond * 200)
 
 		for _, record := range records {
 			portNumber := record.GetInt("portNumber")
