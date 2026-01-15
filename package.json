@@ -1,0 +1,13 @@
+{
+  "name": "binaries",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "init:orchestrator": "cd ./orchestrator && go mod init myapp && go mod tidy",
+    "start:orchestrator": "cd ./orchestrator && go run . serve --http=\"127.0.0.1:8091\"",
+    "start:orchestrator:npm": "cd instances/orchestrator && ../../binaries/pocketbase serve --dir=\"./pb_data\" --publicDir=\"./pb_public\" --hooksDir=\"./pb_hooks\" --migrationsDir=\"./pb_migrations\" --http=\"127.0.0.1:8091\""
+  },
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}

@@ -1,0 +1,9 @@
+2026/01/15 17:10:21 Server started at http://127.0.0.1:8089
+├─ REST API:  http://127.0.0.1:8089/api/
+└─ Dashboard: http://127.0.0.1:8089/_/
+
+(!) Launch the URL below in the browser if it hasn't been open already to create your first superuser account:
+http://127.0.0.1:8089/_/#/pbinstal/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb2xsZWN0aW9uSWQiOiJwYmNfMzE0MjYzNTgyMyIsImV4cCI6MTc2ODQ5ODgyMSwiaWQiOiJnemkyOWY3cjh6eDVsMjUiLCJyZWZyZXNoYWJsZSI6ZmFsc2UsInR5cGUiOiJhdXRoIn0.P3QRYPM01n3glceQuV4qFpm-kxOmG4M8uQ_HSSudW4U
+(you can also create your first superuser by running: ./pocketbase superuser upsert EMAIL PASS)
+
+Error: listen tcp 127.0.0.1:8089: bind: address already in use
