@@ -195,29 +195,54 @@ func main() {
 
 		return e.Next()
 	})
-	app.OnRecordAfterCreateSuccess("instances", "content").BindFunc(func(e *core.RecordEvent) error {
-		fmt.Println("onRecordAfterCreateSuccess - instances, content")
 
+	app.OnRecordAfterCreateSuccess("content").BindFunc(func(e *core.RecordEvent) error {
+		fmt.Println("onRecordAfterCreateSuccess - content")
+
+		contentRecord := e.Record
 		instanceRecords, err := app.FindAllRecords("instances")
-		if err != nil {
-			return e.Next()
-		}
-		contentRecords, err := app.FindAllRecords("content")
+
 		if err != nil {
 			return e.Next()
 		}
 
 		instances := createInstancesFromInstanceRecords(instanceRecords)
+		template := contentRecord.GetString("template")
 
-		for _, contentItem := range contentRecords {
-			template := contentItem.GetString("template")
-			parsedTemplate, err := templatify(template, instances)
-			if err != nil {
-				fmt.Println("Error templatifying:", err)
-			}
+		parsedTemplate, err := templatify(template, instances)
 
-			contentItem.Set("parsedTemplate", parsedTemplate)
-			app.Save(contentItem)
+		if err != nil {
+			fmt.Println("Error templatifying:", err)
+		}
+
+		contentRecord.Set("parsedTemplate", parsedTemplate)
+		app.Save(contentRecord)
+
+		return e.Next()
+	})
+	app.OnRecordAfterUpdateSuccess("content").BindFunc(func(e *core.RecordEvent) error {
+		fmt.Println("OnRecordAfterUpdateSuccess - content")
+
+		contentRecord := e.Record
+		instanceRecords, err := app.FindAllRecords("instances")
+
+		if err != nil {
+			return e.Next()
+		}
+
+		instances := createInstancesFromInstanceRecords(instanceRecords)
+		template := contentRecord.GetString("template")
+
+		parsedTemplate, err := templatify(template, instances)
+		fmt.Println("parsedTemplate:", parsedTemplate)
+
+		if err != nil {
+			fmt.Println("Error templatifying:", err)
+		}
+
+		if e.Record.Get("parsedTemplate") != parsedTemplate {
+			e.Record.Set("parsedTemplate", parsedTemplate)
+			app.Save(contentRecord)
 		}
 
 		return e.Next()
