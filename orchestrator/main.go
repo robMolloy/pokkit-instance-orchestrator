@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"log"
 	"os"
 	"os/exec"
@@ -14,6 +16,39 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 )
+
+type TInstance struct {
+	PortNumber int
+	DirName    string
+}
+
+func createInstanceFromRecord(record *core.Record) TInstance {
+	return TInstance{
+		PortNumber: record.GetInt("portNumber"),
+		DirName:    record.GetString("dirName"),
+	}
+}
+func createInstancesFromInstanceRecords(records []*core.Record) []TInstance {
+	instance := make([]TInstance, len(records))
+	for i, record := range records {
+		instance[i] = createInstanceFromRecord(record)
+	}
+	return instance
+}
+
+func templatify(inputStr string, data any) (string, error) {
+	tmpl, err := template.New("test").Parse(inputStr)
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
 
 func isPocketbaseInstanceActive(portNumber int) (bool, error) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/api/health", portNumber)
@@ -36,7 +71,7 @@ func isPocketbaseInstanceActive(portNumber int) (bool, error) {
 }
 
 func servePocketbase(portNumber int, dirName string) (*int, error) {
-	instanceDirRelativePath := fmt.Sprintf("../instances/%s", dirName)
+	instanceDirRelativePath := fmt.Sprintf("./instances/%s", dirName)
 	if err := os.MkdirAll(instanceDirRelativePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create base directory: %w", err)
 	}
@@ -95,12 +130,12 @@ func main() {
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		fmt.Println("onServe")
 
-		records, err := app.FindAllRecords("instances")
+		instanceRecords, err := app.FindAllRecords("instances")
 		if err != nil {
 			return e.Next()
 		}
 
-		for _, record := range records {
+		for _, record := range instanceRecords {
 			portNumber := record.GetInt("portNumber")
 			dirName := record.GetString("dirName")
 			pid, err := servePocketbase(portNumber, dirName)
@@ -113,28 +148,45 @@ func main() {
 
 		time.Sleep(time.Millisecond * 200)
 
-		for _, record := range records {
+		for _, record := range instanceRecords {
 			portNumber := record.GetInt("portNumber")
 			isActive, _ := isPocketbaseInstanceActive(portNumber)
 			record.Set("isActive", isActive)
 			app.Save(record)
 		}
 
-		return e.Next()
-	})
-
-	app.OnRecordAfterCreateSuccess("instances").BindFunc(func(e *core.RecordEvent) error {
-		fmt.Println("onRecordAfterCreateSuccess")
-
-		portNumber := e.Record.GetInt("portNumber")
-		dirName := e.Record.GetString("dirName")
-
-		pid, err := servePocketbase(portNumber, dirName)
+		contentRecords, err := app.FindAllRecords("content")
 		if err != nil {
 			return e.Next()
 		}
 
-		isActive, _ := isPocketbaseInstanceActive(portNumber)
+		instances := createInstancesFromInstanceRecords(instanceRecords)
+
+		for _, contentRecord := range contentRecords {
+			template := contentRecord.GetString("template")
+			parsedTemplate, err := templatify(template, instances)
+			if err != nil {
+				fmt.Println("Error templatifying:", err)
+			}
+
+			contentRecord.Set("parsedTemplate", parsedTemplate)
+			app.Save(contentRecord)
+		}
+
+		return e.Next()
+	})
+
+	app.OnRecordAfterCreateSuccess("instances").BindFunc(func(e *core.RecordEvent) error {
+		fmt.Println("onRecordAfterCreateSuccess - instances")
+
+		instance := createInstanceFromRecord(e.Record)
+
+		pid, err := servePocketbase(instance.PortNumber, instance.DirName)
+		if err != nil {
+			return e.Next()
+		}
+
+		isActive, _ := isPocketbaseInstanceActive(instance.PortNumber)
 
 		e.Record.Set("pid", pid)
 		e.Record.Set("isActive", isActive)
@@ -143,19 +195,46 @@ func main() {
 
 		return e.Next()
 	})
+	app.OnRecordAfterCreateSuccess("instances", "content").BindFunc(func(e *core.RecordEvent) error {
+		fmt.Println("onRecordAfterCreateSuccess - instances, content")
 
-	app.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
-		fmt.Println("onTerminate")
-
-		records, err := app.FindAllRecords("instances")
+		instanceRecords, err := app.FindAllRecords("instances")
+		if err != nil {
+			return e.Next()
+		}
+		contentRecords, err := app.FindAllRecords("content")
 		if err != nil {
 			return e.Next()
 		}
 
-		for _, record := range records {
-			record.Set("isActive", false)
-			record.Set("pid", 0)
-			app.Save(record)
+		instances := createInstancesFromInstanceRecords(instanceRecords)
+
+		for _, contentItem := range contentRecords {
+			template := contentItem.GetString("template")
+			parsedTemplate, err := templatify(template, instances)
+			if err != nil {
+				fmt.Println("Error templatifying:", err)
+			}
+
+			contentItem.Set("parsedTemplate", parsedTemplate)
+			app.Save(contentItem)
+		}
+
+		return e.Next()
+	})
+
+	app.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
+		fmt.Println("onTerminate")
+
+		instanceRecords, err := app.FindAllRecords("instances")
+		if err != nil {
+			return e.Next()
+		}
+
+		for _, instanceRecord := range instanceRecords {
+			instanceRecord.Set("isActive", false)
+			instanceRecord.Set("pid", 0)
+			app.Save(instanceRecord)
 		}
 
 		return e.Next()
